@@ -1,0 +1,202 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - crm-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    networks:
+      - crm-network
+
+  # Database Services
+  postgres-gateway:
+    image: postgres:15-alpine
+    container_name: postgres-gateway
+    environment:
+      POSTGRES_DB: crm_gateway
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_gateway_data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+
+  postgres-users:
+    image: postgres:15-alpine
+    container_name: postgres-users
+    environment:
+      POSTGRES_DB: crm_users
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_users_data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+
+  postgres-leads:
+    image: postgres:15-alpine
+    container_name: postgres-leads
+    environment:
+      POSTGRES_DB: crm_leads
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_leads_data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+
+  postgres-notifications:
+    image: postgres:15-alpine
+    container_name: postgres-notifications
+    environment:
+      POSTGRES_DB: crm_notifications
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_notifications_data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+
+  # Application Services
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      DATABASE_URL: postgresql://crm_user:crm_password@postgres-gateway:5432/crm_gateway
+      KAFKA_BROKERS: kafka:29092
+      USER_SERVICE_URL: http://user-service:3001
+      LEAD_SERVICE_URL: http://lead-service:3002
+    depends_on:
+      - postgres-gateway
+      - kafka
+      - user-service
+      - lead-service
+      - notification-service
+    networks:
+      - crm-network
+
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/user-service/Dockerfile
+    container_name: user-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      DATABASE_URL: postgresql://crm_user:crm_password@postgres-users:5432/crm_users
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      - postgres-users
+      - kafka
+    networks:
+      - crm-network
+
+  lead-service:
+    build:
+      context: .
+      dockerfile: apps/lead-service/Dockerfile
+    container_name: lead-service
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: postgresql://crm_user:crm_password@postgres-leads:5432/crm_leads
+      KAFKA_BROKERS: kafka:29092
+      USER_SERVICE_URL: http://user-service:3001
+    depends_on:
+      - postgres-leads
+      - kafka
+      - user-service
+    networks:
+      - crm-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    container_name: notification-service
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://crm_user:crm_password@postgres-notifications:5432/crm_notifications
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      - postgres-notifications
+      - kafka
+    networks:
+      - crm-network
+
+
+
+  # Monitoring (Optional)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    depends_on:
+      - kafka
+    networks:
+      - crm-network
+
+volumes:
+  postgres_gateway_data:
+  postgres_users_data:
+  postgres_leads_data:
+  postgres_notifications_data:
+
+networks:
+  crm-network:
+    driver: bridge 
