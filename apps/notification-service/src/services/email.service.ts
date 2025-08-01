@@ -26,7 +26,7 @@ export class EmailService {
   private initializeTransporter(): void {
     const emailProvider = this.configService.get('EMAIL_PROVIDER', 'smtp');
     
-    if (emailProvider === 'smtp') {
+    if (emailProvider === 'gmail') {
       this.transporter = nodemailer.createTransport({
         host: this.configService.get('SMTP_HOST'),
         port: this.configService.get('SMTP_PORT'),

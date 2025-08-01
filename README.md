@@ -191,7 +191,7 @@ USER_SERVICE_URL=http://user-service:3001
 LEAD_SERVICE_URL=http://lead-service:3002
 
 # Email Configuration
-EMAIL_PROVIDER=smtp
+EMAIL_PROVIDER=gmail
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-email@gmail.com

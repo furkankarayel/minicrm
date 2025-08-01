@@ -80,7 +80,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/notifications
 KAFKA_BROKERS=localhost:9092
 
 # Email (SMTP)
-EMAIL_PROVIDER=smtp
+EMAIL_PROVIDER=example
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=your-email@example.com
